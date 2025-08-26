@@ -9,26 +9,35 @@ import (
 
 	_ "github.com/joho/godotenv/autoload"
 
-	"deltachat-bot/deltachat"
+	"github.com/jgimenez/deltachat-webhook-bot/deltachat"
 )
 
 type ServerOptions struct {
-	ListenAddr                   string
-	DeltaChatEmail               string
-	DeltaChatPassword            string
-	DeltaChatNotificationAddress string
+	ListenAddr    string
+	ImportAccount string
 }
 
 func main() {
 	opts := parseOptions()
 
-	deltaChatBot, err := deltachat.New(opts.DeltaChatEmail, opts.DeltaChatPassword)
+	deltaChatBot, err := deltachat.New()
 	if err != nil {
 		slog.Error("could not create deltachat client", "err", err)
+		return
 	}
+
+	if opts.ImportAccount != "" {
+		err := deltaChatBot.ImportBackup(opts.ImportAccount)
+		if err != nil {
+			slog.Error("could not import backup", "err", err)
+			return
+		}
+	}
+
 	err = deltaChatBot.Start()
 	if err != nil {
 		slog.Error("could not start deltachat client", "err", err)
+		return
 	}
 
 	// make cancellable context that cancels with ctrl+c
@@ -41,7 +50,7 @@ func main() {
 		cancel()
 	}()
 
-	server := NewServer(opts.ListenAddr, deltaChatBot, opts.DeltaChatNotificationAddress)
+	server := NewServer(opts.ListenAddr, deltaChatBot)
 	server.Serve(ctx) // blocks
 
 	err = deltaChatBot.Close()
@@ -52,10 +61,8 @@ func main() {
 
 func parseOptions() ServerOptions {
 	opts := ServerOptions{
-		ListenAddr:                   getEnvOr("DELTA_CHAT_BOT_LISTEN_ADDR", ":8080"),
-		DeltaChatEmail:               getEnv("DELTA_CHAT_BOT_EMAIL"),
-		DeltaChatPassword:            getEnv("DELTA_CHAT_BOT_PASSWORD"),
-		DeltaChatNotificationAddress: getEnv("DELTA_CHAT_BOT_NOTIFICATION_ADDRESS"),
+		ListenAddr:    getEnvOr("DELTA_CHAT_BOT_LISTEN_ADDR", ":8080"),
+		ImportAccount: getEnv("DELTA_CHAT_BOT_IMPORT_ACCOUNT"),
 	}
 	return opts
 }

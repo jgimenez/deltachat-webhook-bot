@@ -2,26 +2,26 @@ package main
 
 import (
 	"context"
-	"deltachat-bot/deltachat"
 	"encoding/json"
 	"errors"
 	"log"
 	"log/slog"
 	"net/http"
+
+	"github.com/jgimenez/deltachat-webhook-bot/deltachat"
 )
 
 type Server struct {
-	addr                         string
-	deltaChatClient              *deltachat.Client
-	deltaChatNotificationAddress string
+	addr            string
+	deltaChatClient *deltachat.Client
 }
 
-func NewServer(addr string, deltaChatClient *deltachat.Client, deltaChatNotificationAddress string) *Server {
-	return &Server{addr: addr, deltaChatClient: deltaChatClient, deltaChatNotificationAddress: deltaChatNotificationAddress}
+func NewServer(addr string, deltaChatClient *deltachat.Client) *Server {
+	return &Server{addr: addr, deltaChatClient: deltaChatClient}
 }
 
 func (s *Server) Serve(ctx context.Context) {
-	http.HandleFunc("/", s.sendMessageHandler)
+	http.HandleFunc("/{destination}", s.sendMessageHandler)
 	server := &http.Server{
 		Addr:    s.addr,
 		Handler: nil,
@@ -50,15 +50,29 @@ func (s *Server) sendMessageHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+	destination := r.PathValue("destination")
+	// destination check to avoid spam
+	_, err := s.deltaChatClient.FindContact(destination)
+	if err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
 	var request SendMessageRequest
-	err := json.NewDecoder(r.Body).Decode(&request)
+	err = json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	err = s.deltaChatClient.SendMessage(s.deltaChatNotificationAddress, request.Text)
+	if request.Text == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	err = s.deltaChatClient.SendMessage(destination, request.Text)
 	if err != nil {
 		slog.Error("error sending message", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
+	w.WriteHeader(http.StatusNoContent)
 }

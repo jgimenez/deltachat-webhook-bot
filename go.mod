@@ -1,4 +1,4 @@
-module deltachat-bot
+module github.com/jgimenez/deltachat-webhook-bot
 
 go 1.24.5
 

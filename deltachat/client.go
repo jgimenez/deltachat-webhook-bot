@@ -4,23 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/deltachat/deltachat-rpc-client-go/deltachat/option"
 	"log"
 	"log/slog"
+
+	"github.com/deltachat/deltachat-rpc-client-go/deltachat/option"
 
 	"github.com/deltachat/deltachat-rpc-client-go/deltachat"
 	"github.com/deltachat/deltachat-rpc-client-go/deltachat/transport"
 )
 
 type Client struct {
-	bot      *deltachat.Bot
-	trans    *transport.IOTransport
-	me       deltachat.AccountId
-	email    string
-	password string
+	bot   *deltachat.Bot
+	trans *transport.IOTransport
+	me    deltachat.AccountId
 }
 
-func New(email, password string) (*Client, error) {
+func New() (*Client, error) {
 	trans := transport.NewIOTransport()
 	err := trans.Open()
 	if err != nil {
@@ -30,12 +29,12 @@ func New(email, password string) (*Client, error) {
 	bot := deltachat.NewBot(rpc)
 	me := deltachat.GetAccount(rpc)
 
-	return &Client{bot: bot, trans: trans, me: me, email: email, password: password}, nil
+	return &Client{bot: bot, trans: trans, me: me}, nil
 }
 
 func (c *Client) Start() error {
 	go func() {
-		err := runEchoBot(c.bot, c.me, c.email, c.password)
+		err := runBot(c.bot, c.me)
 		if err != nil {
 			slog.Error("error running bot", "err", err)
 		}
@@ -60,7 +59,7 @@ func logEvent(bot *deltachat.Bot, accId deltachat.AccountId, event deltachat.Eve
 	}
 }
 
-func runEchoBot(bot *deltachat.Bot, accId deltachat.AccountId, email, password string) error {
+func runBot(bot *deltachat.Bot, accId deltachat.AccountId) error {
 	sysinfo, _ := bot.Rpc.GetSystemInfo()
 	for k, v := range sysinfo {
 		slog.Info("Deltachat core info", "key", k, "value", v)
@@ -78,11 +77,7 @@ func runEchoBot(bot *deltachat.Bot, accId deltachat.AccountId, email, password s
 	})
 
 	if isConf, _ := bot.Rpc.IsConfigured(accId); !isConf {
-		slog.Info("Bot not configured, configuring...")
-		err := bot.Configure(accId, email, password)
-		if err != nil {
-			log.Fatalln(err)
-		}
+		return errors.New("account not configured")
 	}
 
 	addr, _ := bot.Rpc.GetConfig(accId, "configured_addr")
@@ -95,6 +90,27 @@ func runEchoBot(bot *deltachat.Bot, accId deltachat.AccountId, email, password s
 }
 
 var ErrNotFound = errors.New("not found")
+
+func (c *Client) ImportBackup(filename string) error {
+	if isConf, _ := c.bot.Rpc.IsConfigured(c.me); isConf {
+		// already configured
+		return nil
+	}
+
+	err := c.bot.Rpc.ImportBackup(c.me, filename, option.None[string]())
+	if err != nil {
+		return fmt.Errorf("importing backup: %w", err)
+	}
+	err = c.bot.Rpc.SetConfig(c.me, "bot", option.Some("1"))
+	if err != nil {
+		log.Fatalln(err)
+	}
+	err = c.bot.Rpc.Configure(c.me)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	return nil
+}
 
 func (c *Client) FindContact(address string) (deltachat.ContactId, error) {
 	ids, err := c.bot.Rpc.GetContactIds(c.me, uint(deltachat.ContactFlagVerifiedOnly), option.None[string]())
