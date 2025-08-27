@@ -1,6 +1,7 @@
 services:
   deltachat-webhook-bot:
     image: ghcr.io/jgimenez/deltachat-webhook-bot:main
+    platform: linux/amd64
     ports:
       - "8080:8080"
     volumes:
