@@ -1,0 +1,14 @@
+services:
+  deltachat-webhook-bot:
+    image: ghcr.io/jgimenez/deltachat-webhook-bot:main
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/config
+      - deltachat-webhook-bot-storage:/storage
+    environment:
+      - DELTA_CHAT_BOT_IMPORT_ACCOUNT=/config/youracct@tarpit.fun.tar
+      - DC_ACCOUNTS_PATH=/storage/accounts
+
+volumes:
+  deltachat-webhook-bot-storage:
